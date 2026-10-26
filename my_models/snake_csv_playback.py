@@ -17,6 +17,8 @@ Run:
  edit XML_PATH below if it lives elsewhere)
 """
 
+import ctypes
+
 import argparse
 import csv
 import time
@@ -99,6 +101,11 @@ def main():
         viewer.cam.lookat[:] = [0, 0, 0]
 
         sim_start_time = time.time()
+
+        user32 = ctypes.windll.user32
+        hWnd = user32.GetForegroundWindow()
+        SW_MAXIMIZE = 3
+        user32.ShowWindow(hWnd, SW_MAXIMIZE)
 
         while viewer.is_running():
             # Step physics until simulation time catches up with real elapsed time
