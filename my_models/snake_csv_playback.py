@@ -11,6 +11,13 @@ Between CSV rows, actuator targets are linearly interpolated so the motion
 is smooth rather than snapping. After the last row, the snake holds that
 final pose indefinitely.
 
+Torque logging:
+  - Every physics step during the CSV motion, the 2-norm of data.actuator_force
+    (sqrt(sum(tau_i^2)) over all actuators) is recorded.
+  - Logging stops when the motion ends (sim time > last CSV time point).
+  - The log is written to snake_torque_norms.txt (next to this script) when
+    the viewer is closed. One line per physics step: "time, norm".
+
 Run:
     python snake_csv_playback.py path/to/angles.csv
 (assumes planar_snake_cars_servo.xml is in the same directory --
@@ -21,6 +28,7 @@ import ctypes
 
 import argparse
 import csv
+import os
 import time
 
 import numpy as np
@@ -30,6 +38,10 @@ import mujoco.viewer
 XML_PATH = "planar_snake_cars_servo.xml"
 NUM_JOINTS = 10
 DT_BETWEEN_POINTS = 0.05  # seconds between consecutive CSV rows
+
+TORQUE_LOG_PATH = os.path.join(
+    os.path.dirname(os.path.abspath(__file__)), "snake_torque_norms.txt"
+)
 
 
 def load_angles_csv(path):
@@ -69,6 +81,14 @@ def get_target_angles(angles, t):
     return angles[idx] * (1.0 - frac) + angles[idx + 1] * frac
 
 
+def write_torque_log(log, path):
+    """Write (time, norm) pairs, one per line."""
+    with open(path, "w") as f:
+        for t, norm in log:
+            f.write(f"{t:.6f}, {norm:.6f}\n")
+    print(f"Wrote {len(log)} torque-norm samples to {path}")
+
+
 def main():
     parser = argparse.ArgumentParser(
         description="Play back a CSV of actuator angles on the planar snake robot."
@@ -96,29 +116,42 @@ def main():
     ]
     assert all(aid >= 0 for aid in actuator_ids), "Actuator name mismatch -- check XML."
 
-    with mujoco.viewer.launch_passive(model, data) as viewer:
-        viewer.cam.distance = 12
-        viewer.cam.lookat[:] = [0, 0, 0]
+    torque_log = []  # list of (sim_time, 2-norm of actuator forces)
 
-        sim_start_time = time.time()
+    try:
+        with mujoco.viewer.launch_passive(model, data) as viewer:
+            viewer.cam.distance = 12
+            viewer.cam.lookat[:] = [0, 0, 0]
 
-        user32 = ctypes.windll.user32
-        hWnd = user32.GetForegroundWindow()
-        SW_MAXIMIZE = 3
-        user32.ShowWindow(hWnd, SW_MAXIMIZE)
+            sim_start_time = time.time()
 
-        while viewer.is_running():
-            # Step physics until simulation time catches up with real elapsed time
-            real_time_elapsed = time.time() - sim_start_time
+            user32 = ctypes.windll.user32
+            hWnd = user32.GetForegroundWindow()
+            SW_MAXIMIZE = 3
+            user32.ShowWindow(hWnd, SW_MAXIMIZE)
 
-            while data.time < real_time_elapsed:
-                target = get_target_angles(angles, data.time)
-                for idx, aid in enumerate(actuator_ids):
-                    data.ctrl[aid] = target[idx]
-                mujoco.mj_step(model, data)
+            while viewer.is_running():
+                # Step physics until simulation time catches up with real elapsed time
+                real_time_elapsed = time.time() - sim_start_time
 
-            viewer.sync()
-            time.sleep(0.001)
+                while data.time < real_time_elapsed:
+                    t = data.time  # time at which this step's forces are computed
+                    target = get_target_angles(angles, t)
+                    for idx, aid in enumerate(actuator_ids):
+                        data.ctrl[aid] = target[idx]
+                    mujoco.mj_step(model, data)
+
+                    # data.actuator_force after mj_step holds the forces applied
+                    # during this step (computed at the pre-step state, time t).
+                    if t <= duration:
+                        torque_log.append(
+                            (t, float(np.linalg.norm(data.actuator_force[actuator_ids])))
+                        )
+
+                viewer.sync()
+                time.sleep(0.001)
+    finally:
+        write_torque_log(torque_log, TORQUE_LOG_PATH)
 
 
 if __name__ == "__main__":

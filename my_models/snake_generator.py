@@ -32,7 +32,7 @@ def create_snake_xml(filename="planar_snake_cars_servo.xml", num_segments=11):
         "geom",
         conaffinity="0",
         condim="3",
-        friction="0.5 0.005 0.0001",  # sliding, torsional, rolling (condim 3 uses only sliding)
+        friction="0.6 0.005 0.0001",  # sliding, torsional, rolling (condim 3 uses only sliding)
         margin="0",
         density="28.3",  # gives ~900 g total with 11 segments (compiled mass was 1.041 kg at 32.73)
         solref="0.02 1",
@@ -49,7 +49,7 @@ def create_snake_xml(filename="planar_snake_cars_servo.xml", num_segments=11):
         axis="0 1 0",
         type="hinge",
         armature="1e-5",  # ~ real wheel spin inertia (about 8e-6 kg m^2); was 0.005
-        damping="0",      # free-rolling bearing; was 0.1 (=40 N s/m reflected per wheel)
+        damping="5e-5",      # free-rolling bearing; was 0.1 (=40 N s/m reflected per wheel)
         frictionloss="0",  # was 0.005 (constant 0.1 N drag per wheel)
     )
     ET.SubElement(
@@ -60,7 +60,7 @@ def create_snake_xml(filename="planar_snake_cars_servo.xml", num_segments=11):
         size="0.05",
         material="geom",
         rgba=".9 .9 .9 1",
-        friction="0.5 0.005 0.015",  # sliding friction 0.5 for now: ratio is 0.003
+        friction="0.6 0.005 0.01992",  # sliding friction 0.6 for now: ratio is ~0.0332
     )
 
     default_car = ET.SubElement(default, "default", **{"class": "car"})
@@ -178,7 +178,7 @@ def create_snake_xml(filename="planar_snake_cars_servo.xml", num_segments=11):
         conaffinity="1",
         condim="3",
         pos="0 0 -0.1",
-        friction="0.5 0.005 0.0001",  # contact uses the max of floor and wheel, so match them
+        friction="0.6 0.005 0.0001",  # contact uses the max of floor and wheel, so match them
         rgba="0.8 0.9 0.8 1",
         type="plane",
     )
